@@ -1,0 +1,132 @@
+---
+- hosts: all
+  become: true
+  tasks:
+
+# Install and Configure ELK Stack in separate hosts
+  - name: Add ElasticSearch GPG Key (Ubuntu)
+    apt_key:
+      url: https://artifacts.elastic.co/GPG-KEY-elasticsearch
+      state: present
+    when: ansible_distribution == "Ubuntu"
+
+  - name: Add ElasticSearch to APT Repo (Ubuntu)
+    apt_repository:
+      repo: "deb https://artifacts.elastic.co/packages/7.x/apt stable main"
+      #filename: 'elastic-7.x'
+    when: ansible_distribution == "Ubuntu"
+
+  - name: Install ElasticSearch to YUM Repo (CentOS)
+    yum_repository:
+      name: elasticsearch
+      description: ElasticSearch Repository
+      baseurl: https://artifacts.elastic.co/packages/7.x/yum
+      gpgcheck: yes
+      gpgkey: https://artifacts.elastic.co/GPG-KEY-elasticsearch
+      enabled: yes
+    when: ansible_distribution == "CentOS"
+
+  - name: Configure ElasticSearch
+    blockinfile:
+      path: /etc/elasticsearch/elasticsearch.yml
+      block: |
+        # ElasticSearch Configuration
+        
+        cluster.name: my-cluster
+        node.name: dev-node-1
+        network.host: 0.0.0.0
+        http.port: 9200
+        discovery.type: single-node
+        path.data: /var/lib/elasticsearch
+        path.logs: /var/log/elasticsearch
+        bootstrap.memory_lock: true
+      state: present
+      create: yes
+
+  - name: Install ELK Stack
+    package:
+      name: 
+        - elasticsearch
+        - kibana
+        - logstash
+      state: latest
+
+  - name: Enable ELK Stack Service
+    vars:
+      elastic_services:
+        - elasticsearch
+        - kibana
+        - logstash
+    service:
+       name: "{{ item }}"
+       enabled: yes
+       state: started
+    loop: "{{ elastic_services }}"
+
+# Install Nagios in one host
+  - name: Install Nagios (Ubuntu)
+    apt:
+      name:
+        - nagios4
+        - nagios4-core
+      state: latest
+    when: ansible_distribution == "Ubuntu"
+
+  - name: Enable Nagios Service
+    service:
+      name: nagios4
+      enabled: yes
+      state: started
+    when: ansible_distribution == "Ubuntu"
+
+# Install Grafana, Prometheus, and InfluxDB in separate hosts
+  - name: Add Grafana GPG Key (Ubuntu)
+    apt_key:
+      url: https://packages.grafana.com/gpg.key
+      state: present
+    when: ansible_distribution == "Ubuntu"
+
+  - name: Add Grafana to APT Repo (Ubuntu)
+    apt_repository:
+      repo: "deb https://packages.grafana.com/oss/deb stable main"
+    when: ansible_distribution == "Ubuntu"
+
+  - name: Install Grafana to YUM Repo (CentOS)
+    yum_repository:
+      name: grafana
+      description: Grafana Repository
+      baseurl: https://rpm.grafana.com
+      repo_gpgcheck: yes
+      gpgcheck: yes
+      gpgkey: https://rpm.grafana.com/gpg.key
+      enabled: yes
+      sslverify: yes
+      sslcacert: /etc/pki/tls/certs/ca-bundle.crt
+    when: ansible_distribution == "CentOS"
+
+  - name: Install Grafana
+    package:
+      name: grafana
+      state: latest
+
+  - name: Enable Grafana Service
+    service:
+      name: grafana-server
+      enabled: yes
+      state: started
+
+# Install Lamp Stack in separate hosts
+  - name: Install Apache2 + PHP (Ubuntu)
+    apt:
+      name:
+        - apache2
+        - php
+        - libapache2-mod-php
+      state: latest
+
+  - name: Install HTTPD + PHP (CentOS)
+    package:
+      name:
+        - httpd
+        - php
+      state: latest
